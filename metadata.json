@@ -1,0 +1,15 @@
+{
+  "name": "Vercel deploy",
+  "description": "Headless Deployment Manager & Web IDE by R_hmt Ofc",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "author": "R_hmt Ofc",
+  "assets": {
+    "icon": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTpGGArTE_eXrg4L5F3A3LPOjjxf8fkt3N5urx4iuR5xN-E6B2pCIzej5o&s=10",
+    "banner": "https://res.cloudinary.com/dwiozm4vz/image/upload/v1775567861/qjyezrr7805iiq6e3qc9.png",
+    "avatar": "https://res.cloudinary.com/dwiozm4vz/image/upload/v1772959730/ootglrvfmykn6xsto7rq.png"
+  }
+}
