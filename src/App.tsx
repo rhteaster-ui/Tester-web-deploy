@@ -161,13 +161,24 @@ const HomeTab = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
       const allProjects = await db.projects.toArray();
       setProjects(allProjects);
       
-      // Load or init stats
+      try {
+        const response = await fetch("/api/stats/public");
+        const data = await response.json();
+        if (response.ok) {
+          setStats({
+            visitors: data.visitors || 1240,
+            deploys: data.deploys || 850
+          });
+          await db.stats.put({ id: "visitors", value: data.visitors || 1240 });
+          await db.stats.put({ id: "deploys", value: data.deploys || 850 });
+          return;
+        }
+      } catch (error) {
+        console.warn("Gagal memuat statistik server, fallback ke local db", error);
+      }
+
       const visitorStat = await db.stats.get("visitors");
       const deployStat = await db.stats.get("deploys");
-      
-      if (!visitorStat) await db.stats.add({ id: "visitors", value: 1240 });
-      if (!deployStat) await db.stats.add({ id: "deploys", value: 850 });
-      
       setStats({
         visitors: visitorStat?.value || 1240,
         deploys: deployStat?.value || 850

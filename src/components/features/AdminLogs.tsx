@@ -109,6 +109,11 @@ export function AdminLogs() {
                   <p className="text-2xl md:text-3xl font-bold text-red-400">{logs.stats.error}</p>
                 </div>
               </div>
+              {logs.limited && (
+                <div className="p-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs">
+                  Mode publik aktif: detail recent logs disembunyikan. Tambahkan header Authorization Bearer admin secret untuk mode penuh.
+                </div>
+              )}
 
               <div className="rounded-2xl md:rounded-3xl bg-black border border-white/10 overflow-hidden shadow-2xl">
                 <div className="p-3 md:p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
