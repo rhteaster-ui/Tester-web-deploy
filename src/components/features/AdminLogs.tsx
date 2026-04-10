@@ -4,11 +4,13 @@ import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { VercelLogs } from "./VercelLogs";
+import { db } from "@/src/lib/db";
 
 export function AdminLogs() {
-  const [subTab, setSubTab] = useState<"system" | "build">("build");
+  const [subTab, setSubTab] = useState<"system" | "build" | "repo" | "deployed">("build");
   const [logs, setLogs] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
 
   const fetchLogs = async () => {
     setIsLoading(true);
@@ -32,6 +34,7 @@ export function AdminLogs() {
 
   useEffect(() => {
     fetchLogs();
+    db.projects.toArray().then(setProjects);
   }, []);
 
   return (
@@ -63,6 +66,26 @@ export function AdminLogs() {
             <Terminal className="w-4 h-4" />
             Build
           </button>
+          <button 
+            onClick={() => setSubTab("repo")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[40px]",
+              subTab === "repo" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"
+            )}
+          >
+            <ListTree className="w-4 h-4" />
+            Repo
+          </button>
+          <button 
+            onClick={() => setSubTab("deployed")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[40px]",
+              subTab === "deployed" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"
+            )}
+          >
+            <Activity className="w-4 h-4" />
+            Deployed
+          </button>
         </div>
       </header>
 
@@ -86,6 +109,11 @@ export function AdminLogs() {
                   <p className="text-2xl md:text-3xl font-bold text-red-400">{logs.stats.error}</p>
                 </div>
               </div>
+              {logs.limited && (
+                <div className="p-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs">
+                  Mode publik aktif: detail recent logs disembunyikan. Tambahkan header Authorization Bearer admin secret untuk mode penuh.
+                </div>
+              )}
 
               <div className="rounded-2xl md:rounded-3xl bg-black border border-white/10 overflow-hidden shadow-2xl">
                 <div className="p-3 md:p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
@@ -129,8 +157,25 @@ export function AdminLogs() {
             </div>
           )}
         </>
-      ) : (
+      ) : subTab === "build" ? (
         <VercelLogs />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {projects
+            .filter((p) => (subTab === "deployed" ? p.isDeployed : !p.isDeployed))
+            .map((p) => (
+              <div key={p.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                <p className="font-bold text-white">{p.name}</p>
+                <p className="text-xs text-white/40">{p.isDeployed ? "Sudah deploy" : "Tersimpan di repository"}</p>
+                {p.deploymentUrl && <p className="text-xs text-green-400">{p.deploymentUrl}</p>}
+              </div>
+            ))}
+          {projects.filter((p) => (subTab === "deployed" ? p.isDeployed : !p.isDeployed)).length === 0 && (
+            <div className="p-10 rounded-3xl border border-dashed border-white/10 text-center text-white/40">
+              Tidak ada data.
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
