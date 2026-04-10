@@ -11,9 +11,12 @@ export interface Project {
   id: string; // Project Name or UUID
   name: string;
   createdAt: number;
+  updatedAt?: number;
   lastDeployedAt?: number;
   deploymentUrl?: string;
   isDeployed?: boolean;
+  source?: "manual" | "import";
+  temporary?: boolean;
 }
 
 export interface GlobalStat {

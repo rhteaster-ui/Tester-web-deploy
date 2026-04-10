@@ -11,9 +11,9 @@ export class VFSDB extends Dexie {
 
   constructor() {
     super("VFSDB");
-    this.version(4).stores({
+    this.version(5).stores({
       files: "++id, projectId, path",
-      projects: "id, name, createdAt, isDeployed",
+      projects: "id, name, createdAt, updatedAt, isDeployed, temporary",
       stats: "id",
       tokens: "++id, name, isActive",
     });
