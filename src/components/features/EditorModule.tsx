@@ -20,6 +20,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
   const [code, setCode] = useState("");
   const [projectName, setProjectName] = useState(localStorage.getItem("current_project_id") || "default-project");
+  const [projectTabs, setProjectTabs] = useState<string[]>([]);
   const [isDeploying, setIsDeploying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -40,8 +41,10 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   }, []);
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [editorMode, setEditorMode] = useState<"menu" | "editor">(projectName === "default-project" ? "menu" : "editor");
+  const [editorMode, setEditorMode] = useState<"menu" | "editor">("menu");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [repositories, setRepositories] = useState<any[]>([]);
+  const [domainName, setDomainName] = useState("");
 
   const isTrialMode = localStorage.getItem("vercel_token") === "TRIAL_MODE_ACTIVE";
   const hasUserToken = !!localStorage.getItem("vercel_token") && !isTrialMode;
@@ -60,11 +63,22 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     const allFiles = await db.files.where("projectId").equals(projectName).toArray();
     setFiles(allFiles);
   };
+  const loadRepositories = async () => {
+    const allProjects = await db.projects.toArray();
+    setRepositories(allProjects.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)));
+  };
 
   useEffect(() => {
     loadFiles();
+    loadRepositories();
     setFramework(localStorage.getItem(`framework_${projectName}`) || null);
     setDeployedUrl(localStorage.getItem(`deployed_url_${projectName}`) || null);
+  }, [projectName]);
+
+  useEffect(() => {
+    if (projectName && projectName !== "default-project") {
+      setProjectTabs(prev => (prev.includes(projectName) ? prev : [...prev, projectName]));
+    }
   }, [projectName]);
 
   useEffect(() => {
@@ -143,6 +157,16 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     const uploadedFiles = e.target.files;
     if (!uploadedFiles) return;
 
+    const saveToRepo = confirm("Simpan hasil ekstrak ke repository? Klik Batal untuk editor tab saja.");
+    let targetProject = projectName;
+    if (saveToRepo && (projectName === "default-project" || projectName.startsWith("temp-"))) {
+      const repoName = prompt("Nama repository untuk hasil ekstrak:");
+      if (!repoName) return;
+      targetProject = repoName;
+      setProjectName(repoName);
+      if (!projectTabs.includes(repoName)) setProjectTabs(prev => [...prev, repoName]);
+    }
+
     setIsExtracting(true);
     const filesToInsert: ProjectFile[] = [];
     
@@ -158,7 +182,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             if (!zipEntry.dir) {
               const content = await zipEntry.async("text");
               filesToInsert.push({
-                projectId: projectName,
+                projectId: targetProject,
                 path,
                 content,
                 isFolder: false,
@@ -166,7 +190,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
               });
             } else {
               filesToInsert.push({
-                projectId: projectName,
+                projectId: targetProject,
                 path: path.endsWith("/") ? path.slice(0, -1) : path,
                 content: "FOLDER_MARKER",
                 isFolder: true,
@@ -177,7 +201,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         } else {
           const content = await file.text();
           filesToInsert.push({
-            projectId: projectName,
+            projectId: targetProject,
             path: file.name,
             content,
             isFolder: false,
@@ -187,8 +211,24 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       }
 
       if (filesToInsert.length > 0) {
+        if (!saveToRepo) {
+          targetProject = `temp-${Date.now()}`;
+          filesToInsert.forEach(f => (f.projectId = targetProject));
+          setProjectTabs(prev => [...prev, targetProject]);
+          setProjectName(targetProject);
+        } else {
+          await db.projects.put({
+            id: targetProject,
+            name: targetProject,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            source: "import",
+            temporary: false
+          });
+        }
         await db.files.bulkAdd(filesToInsert);
         loadFiles();
+        loadRepositories();
         toast.success(`Berhasil mengunggah ${filesToInsert.length} file`);
       }
     } catch (error: any) {
@@ -205,8 +245,19 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     }
     if (!activeFile) return;
     await db.files.update(activeFile.id!, { content: code, updatedAt: Date.now() });
+    await db.projects.put({
+      id: projectName,
+      name: projectName,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isDeployed: !!deployedUrl,
+      deploymentUrl: deployedUrl || undefined,
+      source: "manual",
+      temporary: projectName.startsWith("temp-")
+    });
     toast.success("File disimpan ke VFS");
     loadFiles();
+    loadRepositories();
   };
 
   const selectFile = (file: ProjectFile) => {
@@ -243,8 +294,12 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     }
   };
 
-  const handleDeleteFile = async (id: number, e: React.MouseEvent) => {
+  const handleDeleteFile = async (id: number | undefined, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!id) {
+      toast.error("File tidak valid untuk dihapus");
+      return;
+    }
     if (isDemo) {
       toast.error("Mode Demo: Anda tidak dapat menghapus file.");
       return;
@@ -527,6 +582,10 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         }
       }
 
+      const sanitizedDomain = domainName
+        ? domainName.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 63)
+        : "";
+
       const response = await fetch("/api/deploy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -534,7 +593,8 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           files: payloadFiles, 
           projectName, 
           token: token === "TRIAL_MODE_ACTIVE" ? "" : token, 
-          framework 
+          framework,
+          domainName: sanitizedDomain || undefined
         }),
       });
 
@@ -546,7 +606,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         // Mark project as deployed in DB
         const project = await db.projects.get(projectName);
         if (project) {
-          await db.projects.update(projectName, { isDeployed: true, lastDeployedAt: Date.now(), deploymentUrl: data.url });
+          await db.projects.update(projectName, { isDeployed: true, lastDeployedAt: Date.now(), deploymentUrl: data.url, updatedAt: Date.now() });
         } else {
           await db.projects.add({
             id: projectName,
@@ -554,13 +614,15 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             createdAt: Date.now(),
             isDeployed: true,
             lastDeployedAt: Date.now(),
-            deploymentUrl: data.url
+            deploymentUrl: data.url,
+            source: "manual"
           });
         }
 
         toast.success(`Deployment live di ${data.url}`);
         window.open(`https://${data.url}`, "_blank");
         setShowDeployConfig(false);
+        loadRepositories();
       } else {
         const errorMsg = typeof data.error === "string" 
           ? data.error 
@@ -656,6 +718,24 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
               <p className="text-xs md:text-sm text-white/40">Muat proyek yang ada dari database lokal Anda.</p>
             </div>
           </button>
+          <div className="md:col-span-2 p-4 rounded-3xl bg-white/5 border border-white/10 max-h-48 overflow-y-auto">
+            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-3">Repository Tersimpan</p>
+            <div className="space-y-2">
+              {repositories.map((repo) => (
+                <button
+                  key={repo.id}
+                  onClick={() => {
+                    setProjectName(repo.id);
+                    setEditorMode("editor");
+                    setProjectTabs(prev => (prev.includes(repo.id) ? prev : [...prev, repo.id]));
+                  }}
+                  className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
+                >
+                  <p className="text-sm font-bold text-white">{repo.name}</p>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="p-6 md:p-8 rounded-[32px] md:rounded-[40px] bg-blue-600/10 border border-blue-600/20 flex flex-col justify-center space-y-3">
             <div className="flex items-center gap-2 text-blue-400">
@@ -684,7 +764,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       {/* Back to Menu Button (Mobile) */}
       <button 
         onClick={() => setEditorMode("menu")}
-        className="md:hidden absolute top-4 left-4 z-50 p-2 bg-white/10 backdrop-blur-md rounded-full text-white"
+        className="md:hidden absolute top-16 left-4 z-50 p-2 bg-white/10 backdrop-blur-md rounded-full text-white"
       >
         <ArrowLeft className="w-5 h-5" />
       </button>
@@ -722,6 +802,16 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                     <option key={f.id || "null"} value={f.id || ""}>{f.name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-white/40 font-mono uppercase">Custom Domain (opsional)</label>
+                <input
+                  type="text"
+                  value={domainName}
+                  onChange={(e) => setDomainName(e.target.value)}
+                  placeholder="nama-domain-vercel"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none transition-all"
+                />
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
@@ -822,6 +912,26 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       <div className="flex-1 flex flex-col min-w-0">
         <div className="h-14 border-b border-white/10 bg-[#0a0a0a] flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-4 truncate">
+            <div className="hidden md:flex items-center gap-1 max-w-[340px] overflow-x-auto custom-scrollbar">
+              {projectTabs.map(tab => (
+                <div key={tab} className={cn("flex items-center gap-2 px-2 py-1 rounded-lg border text-xs", tab === projectName ? "bg-white/10 border-white/20 text-white" : "bg-white/5 border-white/10 text-white/60")}>
+                  <button onClick={() => setProjectName(tab)}>{tab}</button>
+                  <button onClick={async () => {
+                    const projectFiles = await db.files.where("projectId").equals(tab).toArray();
+                    if (projectFiles.some(f => f.updatedAt > Date.now() - 5 * 60 * 1000) && !confirm("Tutup tab? Perubahan yang belum disimpan ke repository bisa hilang.")) return;
+                    if (tab.startsWith("temp-")) {
+                      await db.files.where("projectId").equals(tab).delete();
+                    }
+                    setProjectTabs(prev => prev.filter(t => t !== tab));
+                    if (projectName === tab) {
+                      const remain = projectTabs.filter(t => t !== tab);
+                      if (remain.length) setProjectName(remain[0]);
+                      else setEditorMode("menu");
+                    }
+                  }}>×</button>
+                </div>
+              ))}
+            </div>
             <button 
               onClick={() => setShowRenameModal({ type: "project", oldPath: projectName })}
               className="flex items-center gap-2 text-white/40 hover:text-white transition-all min-h-[40px] px-2"

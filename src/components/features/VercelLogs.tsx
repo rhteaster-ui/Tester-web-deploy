@@ -65,7 +65,7 @@ export function VercelLogs() {
           <div>
             <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">ID Pengguna</p>
             <p className="text-sm font-black text-white truncate max-w-[150px]">
-              {localStorage.getItem("vercel_token")?.slice(0, 12)}...
+              Tersembunyi
             </p>
           </div>
         </div>
