@@ -21,6 +21,7 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
   const [tokens, setTokens] = useState<VercelToken[]>([]);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  const [mode, setMode] = useState<"token" | "demo">("token");
 
   const loadTokens = async () => {
     const all = await db.tokens.toArray();
@@ -32,14 +33,14 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
   }, []);
 
   const handleAdd = async () => {
-    if (!name || !value) {
-      toast.error("Nama dan Token wajib diisi");
+    if (!name || (mode === "token" && !value)) {
+      toast.error(mode === "token" ? "Nama dan Token wajib diisi" : "Nama akun demo wajib diisi");
       return;
     }
     const newToken: VercelToken = {
       name,
-      value,
-      isTrial: value === "TRIAL_MODE_ACTIVE",
+      value: mode === "demo" ? "TRIAL_MODE_ACTIVE" : value,
+      isTrial: mode === "demo" || value === "TRIAL_MODE_ACTIVE",
       isActive: false
     };
     await db.tokens.add(newToken);
@@ -68,6 +69,20 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
     <div className="space-y-6">
       <div className="space-y-4">
         <h3 className="text-xl font-bold text-white">Kelola Akun Token</h3>
+        <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+          <button
+            onClick={() => setMode("token")}
+            className={cn("py-2 rounded-lg text-xs font-bold transition-all", mode === "token" ? "bg-white/10 text-white" : "text-white/50")}
+          >
+            Trial / Non Trial
+          </button>
+          <button
+            onClick={() => setMode("demo")}
+            className={cn("py-2 rounded-lg text-xs font-bold transition-all", mode === "demo" ? "bg-blue-500/20 text-blue-400" : "text-white/50")}
+          >
+            Demo
+          </button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input 
             type="text" 
@@ -81,6 +96,7 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
             placeholder="Vercel Token (dpl_...)" 
             value={value}
             onChange={e => setValue(e.target.value)}
+            disabled={mode === "demo"}
             className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
           />
         </div>
@@ -191,6 +207,21 @@ const HomeTab = ({ setActiveTab }: { setActiveTab: (tab: string) => void }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10">
+        <div className="lg:col-span-2 p-6 md:p-8 rounded-[32px] bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg md:text-2xl font-black text-white">Grafik Aktivitas User</h3>
+            <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">7 Hari Terakhir</p>
+          </div>
+          <div className="grid grid-cols-7 gap-2 h-36 items-end">
+            {[35, 52, 61, 49, 75, 66, 82].map((v, idx) => (
+              <div key={idx} className="flex flex-col items-center gap-2">
+                <div className="w-full rounded-t-md bg-gradient-to-t from-blue-600/40 to-blue-400 h-full" style={{ height: `${v}%` }} />
+                <span className="text-[10px] text-white/40">{["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"][idx]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Long Card 1: Deployment CTA */}
         <div className="p-6 md:p-10 rounded-[32px] md:rounded-[48px] bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-white/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700">
