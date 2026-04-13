@@ -14,7 +14,7 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
   const [projectName, setProjectName] = useState("");
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<any>(null);
-  const isUsingServerTokenFallback = !token || token === "TRIAL_MODE_ACTIVE";
+  const isUsingDemoMode = !token || token === "TRIAL_MODE_ACTIVE";
 
   const handleSaveToken = () => {
     localStorage.setItem("vercel_token", token);
@@ -156,9 +156,9 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
                 />
                 <div className="flex items-center gap-2 text-[10px] text-white/30 italic mt-2">
                   <AlertCircle className="w-3 h-3" />
-                  {isUsingServerTokenFallback
-                    ? "Jika token dikosongkan/demode, sistem akan mencoba token server (jika tersedia)."
-                    : "Token pribadi disimpan lokal dan dipakai saat deploy untuk akun Anda sendiri."}
+                  {isUsingDemoMode
+                    ? "Mode demo hanya untuk uji tampilan. Untuk deploy nyata, isi token Vercel yang valid."
+                    : "Token pribadi disimpan lokal dan dipakai saat deploy ke akun Anda sendiri."}
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
