@@ -46,6 +46,17 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [repositories, setRepositories] = useState<any[]>([]);
   const [domainName, setDomainName] = useState("");
 
+  const toBase64 = (value: string) => {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  };
+
   const isTrialMode = localStorage.getItem("vercel_token") === "TRIAL_MODE_ACTIVE";
   const hasUserToken = !!localStorage.getItem("vercel_token") && !isTrialMode;
   const isDemo = appMode === "demo";
@@ -533,17 +544,14 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
 
   const handleDeploy = async () => {
     const token = localStorage.getItem("vercel_token");
-    if (!token) {
-      toast.error("Token Vercel tidak ditemukan. Silakan atur di tab Deploy.");
-      return;
-    }
+    const usingServerToken = !token || token === "TRIAL_MODE_ACTIVE";
 
     setIsDeploying(true);
     try {
       const allFiles = await db.files.where("projectId").equals(projectName).toArray();
       const payloadFiles = allFiles.map(f => ({
         path: f.path,
-        content: btoa(f.content) // Convert to base64
+        content: toBase64(f.content) // Unicode-safe base64
       }));
 
       // Inject PWA files if enabled and not present
@@ -569,7 +577,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           };
           payloadFiles.push({
             path: "manifest.json",
-            content: btoa(JSON.stringify(manifest, null, 2))
+            content: toBase64(JSON.stringify(manifest, null, 2))
           });
         }
 
@@ -577,7 +585,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           const sw = `self.addEventListener('install', (e) => { e.waitUntil(caches.open('v1').then(c => c.addAll(['/']))); });\nself.addEventListener('fetch', (e) => { e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))); });`;
           payloadFiles.push({
             path: "sw.js",
-            content: btoa(sw)
+            content: toBase64(sw)
           });
         }
       }
@@ -592,7 +600,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         body: JSON.stringify({ 
           files: payloadFiles, 
           projectName, 
-          token: token === "TRIAL_MODE_ACTIVE" ? "" : token, 
+          token: usingServerToken ? "" : token,
           framework,
           domainName: sanitizedDomain || undefined
         }),
@@ -619,7 +627,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           });
         }
 
-        toast.success(`Deployment live di ${data.url}`);
+        toast.success(`Deployment live di ${data.url}${usingServerToken ? " (token server)" : ""}`);
         window.open(`https://${data.url}`, "_blank");
         setShowDeployConfig(false);
         loadRepositories();
