@@ -8,6 +8,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { BottomNav } from "./components/layout/BottomNav";
 import { DeploymentPanel } from "./components/features/DeploymentPanel";
 import { EditorModule } from "./components/features/EditorModule";
+import { AdminLogs } from "./components/features/AdminLogs";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { Rocket, ShieldCheck, Github, Instagram, MessageCircle, Send, Code, ChevronRight, Activity, Trash2, UserPlus, LogOut, Heart } from "lucide-react";
@@ -464,6 +465,7 @@ export default function App() {
   const [appMode, setAppMode] = useState<"demo" | "token" | null>(localStorage.getItem("app_mode") as any);
   const [showTokenManager, setShowTokenManager] = useState(false);
   const [activeTokenName, setActiveTokenName] = useState<string | null>(null);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
 
   useEffect(() => {
     const checkActiveToken = async () => {
@@ -490,10 +492,7 @@ export default function App() {
 
   const handleTabChange = (tab: string) => {
     if (activeTab === "editor" && hasUnsavedChanges) {
-      if (confirm("Ada perubahan yang belum disimpan. Yakin ingin keluar?")) {
-        setHasUnsavedChanges(false);
-        setActiveTab(tab);
-      }
+      setPendingTab(tab);
     } else {
       setActiveTab(tab);
     }
@@ -570,6 +569,32 @@ export default function App() {
         </div>
       )}
 
+      {pendingTab && (
+        <div className="fixed inset-0 z-[215] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl bg-[#0a0a0a] border border-white/10 p-6 space-y-5">
+            <div>
+              <h3 className="text-lg font-bold text-white">Keluar dari editor?</h3>
+              <p className="text-sm text-white/50 mt-1">Ada perubahan yang belum disimpan.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setPendingTab(null)} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white">
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setHasUnsavedChanges(false);
+                  setActiveTab(pendingTab);
+                  setPendingTab(null);
+                }}
+                className="flex-1 py-3 rounded-xl bg-red-500/90 hover:bg-red-500 text-white"
+              >
+                Tetap Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Background Grid */}
       <div className="fixed inset-0 bg-grid-white/[0.02] bg-[size:40px_40px] pointer-events-none" />
       <div className="fixed inset-0 bg-gradient-to-b from-black via-transparent to-black pointer-events-none" />
@@ -614,6 +639,7 @@ export default function App() {
               {activeTab === "about" && <AboutTab />}
               {activeTab === "deploy" && <DeploymentPanel setActiveTab={handleTabChange} />}
               {activeTab === "editor" && <EditorModule setHasUnsavedChanges={setHasUnsavedChanges} appMode={appMode} />}
+              {activeTab === "log" && <AdminLogs />}
               {activeTab === "settings" && <div className="p-8 text-white/50 italic">Memuat modul pengaturan...</div>}
             </motion.div>
           </AnimatePresence>

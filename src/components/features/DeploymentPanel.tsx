@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Upload, Shield, AlertCircle, CheckCircle2, Loader2, ExternalLink, Rocket, FileCode } from "lucide-react";
+import { Upload, Shield, AlertCircle, Loader2, ExternalLink, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import JSZip from "jszip";
@@ -12,6 +12,7 @@ interface DeploymentPanelProps {
 export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
   const [token, setToken] = useState(localStorage.getItem("vercel_token") || "");
   const [projectName, setProjectName] = useState("");
+  const [frameworkPreset, setFrameworkPreset] = useState("auto");
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<any>(null);
   const isUsingDemoMode = !token || token === "TRIAL_MODE_ACTIVE";
@@ -44,15 +45,11 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
     const uploadedFiles = e.target.files;
     if (!uploadedFiles || uploadedFiles.length === 0) return;
 
-    if (!projectName) {
-      toast.error("Silakan masukkan nama proyek terlebih dahulu");
-      return;
-    }
-
     setIsDeploying(true);
     setDeploymentResult(null);
 
     try {
+      const inferredName = projectName.trim() || `repo-${new Date().toISOString().replace(/[:.]/g, "-")}`;
       const filesToInsert: any[] = [];
       const filesForDirectDeploy: any[] = [];
 
@@ -67,7 +64,7 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
               const base64Content = await fileData.async("base64");
               
               filesToInsert.push({
-                projectId: projectName,
+                projectId: inferredName,
                 path,
                 content: textContent,
                 isFolder: false,
@@ -90,8 +87,8 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
           });
 
           filesToInsert.push({
-            projectId: projectName,
-            path: file.name,
+                projectId: inferredName,
+                path: file.name,
             content: textContent,
             isFolder: false,
             updatedAt: Date.now()
@@ -104,16 +101,16 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
         }
       }
 
-      const detectedFramework = detectFramework(filesForDirectDeploy);
+      const detectedFramework = frameworkPreset === "auto" ? detectFramework(filesForDirectDeploy) : (frameworkPreset || null);
       if (detectedFramework) {
         toast.info(`Framework terdeteksi: ${detectedFramework}`);
       }
 
       // Save to VFS and redirect to Editor
-      await db.files.where("projectId").equals(projectName).delete();
+      await db.files.where("projectId").equals(inferredName).delete();
       await db.files.bulkAdd(filesToInsert);
-      localStorage.setItem("current_project_id", projectName);
-      localStorage.setItem(`framework_${projectName}`, detectedFramework || "");
+      localStorage.setItem("current_project_id", inferredName);
+      localStorage.setItem(`framework_${inferredName}`, detectedFramework || "");
       
       toast.success(`Berhasil mengekstrak ${filesToInsert.length} file. Mengalihkan ke Editor...`);
       setActiveTab("editor");
@@ -217,18 +214,34 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Nama Proyek</label>
+                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Nama Proyek (opsional)</label>
                   <input 
                     type="text"
                     value={projectName}
                     onChange={(e) => setProjectName(e.target.value)}
-                    placeholder="contoh: aplikasi-keren-saya"
+                    placeholder="Kosongkan = auto generate"
                     className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-purple-500 outline-none transition-all shadow-inner min-h-[56px]"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Framework</label>
+                  <select
+                    value={frameworkPreset}
+                    onChange={(e) => setFrameworkPreset(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-purple-500 outline-none transition-all shadow-inner min-h-[56px]"
+                  >
+                    <option value="auto">Auto Detect</option>
+                    <option value="">Other (Static)</option>
+                    <option value="nextjs">Next.js</option>
+                    <option value="vite">Vite</option>
+                    <option value="create-react-app">Create React App</option>
+                    <option value="nuxtjs">Nuxt.js</option>
+                    <option value="gatsby">Gatsby</option>
+                  </select>
+                </div>
                 <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
                   <p className="text-[10px] text-purple-400/60 leading-relaxed">
-                    Nama proyek akan digunakan sebagai ID unik di Vercel dan database lokal Anda.
+                    Nama repo akan dibuat otomatis jika kosong. Framework bisa Auto Detect atau manual.
                   </p>
                 </div>
               </div>

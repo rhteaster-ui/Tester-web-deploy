@@ -1,5 +1,5 @@
 import React from "react";
-import { Home, Rocket, Code, Info } from "lucide-react";
+import { Home, Rocket, Code, Info, ScrollText } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 interface BottomNavProps {
@@ -11,6 +11,7 @@ const navItems = [
   { id: "home", label: "Home", icon: Home },
   { id: "deploy", label: "Deploy", icon: Rocket },
   { id: "editor", label: "Editor", icon: Code },
+  { id: "log", label: "Log", icon: ScrollText },
   { id: "about", label: "About", icon: Info },
 ];
 

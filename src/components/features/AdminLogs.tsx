@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Terminal, ShieldAlert, RefreshCw, Clock, Activity, LayoutGrid, ListTree } from "lucide-react";
+import { Terminal, RefreshCw, Activity, LayoutGrid, ListTree, Trash2, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -11,6 +11,7 @@ export function AdminLogs() {
   const [logs, setLogs] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
+  const [healthMap, setHealthMap] = useState<Record<string, "online" | "offline" | "unknown">>({});
 
   const fetchLogs = async () => {
     setIsLoading(true);
@@ -36,6 +37,39 @@ export function AdminLogs() {
     fetchLogs();
     db.projects.toArray().then(setProjects);
   }, []);
+
+  const refreshProjects = async () => {
+    const all = await db.projects.toArray();
+    setProjects(all);
+  };
+
+  const checkWebsite = async (url?: string) => {
+    if (!url) return "unknown";
+    try {
+      const response = await fetch(`https://${url}`, { method: "HEAD", mode: "no-cors" });
+      return response ? "online" : "unknown";
+    } catch {
+      return "offline";
+    }
+  };
+
+  const handleDeleteRepo = async (projectId: string) => {
+    await db.files.where("projectId").equals(projectId).delete();
+    await db.projects.delete(projectId);
+    toast.success("Repository dihapus dari histori.");
+    refreshProjects();
+  };
+
+  const handleDeleteDeployment = async (projectId: string) => {
+    await db.projects.update(projectId, {
+      isDeployed: false,
+      deploymentUrl: undefined,
+      lastDeployedAt: undefined,
+      updatedAt: Date.now()
+    });
+    toast.success("Data deploy dihapus dari histori.");
+    refreshProjects();
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-6xl mx-auto">
@@ -164,10 +198,35 @@ export function AdminLogs() {
           {projects
             .filter((p) => (subTab === "deployed" ? p.isDeployed : !p.isDeployed))
             .map((p) => (
-              <div key={p.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+              <div key={p.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
                 <p className="font-bold text-white">{p.name}</p>
                 <p className="text-xs text-white/40">{p.isDeployed ? "Sudah deploy" : "Tersimpan di repository"}</p>
                 {p.deploymentUrl && <p className="text-xs text-green-400">{p.deploymentUrl}</p>}
+                {p.deploymentUrl && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        const status = await checkWebsite(p.deploymentUrl);
+                        setHealthMap(prev => ({ ...prev, [p.id]: status }));
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs bg-white/5 border border-white/10 text-white/70 flex items-center gap-1"
+                    >
+                      <Globe className="w-3.5 h-3.5" /> Cek Status
+                    </button>
+                    {healthMap[p.id] && (
+                      <span className={cn("text-xs", healthMap[p.id] === "online" ? "text-green-400" : healthMap[p.id] === "offline" ? "text-red-400" : "text-yellow-400")}>
+                        {healthMap[p.id]}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => (subTab === "deployed" ? handleDeleteDeployment(p.id) : handleDeleteRepo(p.id))}
+                  className="px-3 py-2 rounded-xl text-xs bg-red-500/10 border border-red-500/20 text-red-400 flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {subTab === "deployed" ? "Hapus Deploy" : "Hapus Repo"}
+                </button>
               </div>
             ))}
           {projects.filter((p) => (subTab === "deployed" ? p.isDeployed : !p.isDeployed)).length === 0 && (

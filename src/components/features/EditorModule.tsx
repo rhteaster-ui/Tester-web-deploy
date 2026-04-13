@@ -3,7 +3,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { css } from "@codemirror/lang-css";
-import { Folder, File, Plus, Save, Trash2, ChevronRight, ChevronDown, FileCode, Rocket, Loader2, Code, Download, Eye, EyeOff, Maximize2, AlertCircle, MoreVertical, Upload, FilePlus, Globe, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Folder, Save, Trash2, ChevronRight, ChevronDown, FileCode, Rocket, Loader2, Code, Download, Eye, EyeOff, Maximize2, AlertCircle, MoreVertical, Upload, FilePlus, Globe, ArrowLeft, ShieldCheck, FolderGit2 } from "lucide-react";
 import { db, type ProjectFile } from "@/src/lib/db";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
@@ -24,7 +24,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [isDeploying, setIsDeploying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [framework, setFramework] = useState<string | null>(localStorage.getItem(`framework_${projectName}`) || null);
+  const [framework, setFramework] = useState<string | null>(localStorage.getItem(`framework_${projectName}`) || "auto");
   const [showDeployConfig, setShowDeployConfig] = useState(false);
   const [isPwaEnabled, setIsPwaEnabled] = useState(true);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(localStorage.getItem(`deployed_url_${projectName}`) || null);
@@ -45,6 +45,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<any[]>([]);
   const [domainName, setDomainName] = useState("");
+  const [confirmState, setConfirmState] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
 
   const toBase64 = (value: string) => {
     const bytes = new TextEncoder().encode(value);
@@ -57,11 +58,29 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     return btoa(binary);
   };
 
+  const detectFrameworkFromFiles = (projectFiles: ProjectFile[]) => {
+    const pkgFile = projectFiles.find((f) => !f.isFolder && /(^|\/)package\.json$/i.test(f.path));
+    if (!pkgFile) return null;
+    try {
+      const parsed = JSON.parse(pkgFile.content);
+      const deps = { ...(parsed.dependencies || {}), ...(parsed.devDependencies || {}) };
+      if (deps.next) return "nextjs";
+      if (deps.vite) return "vite";
+      if (deps["react-scripts"]) return "create-react-app";
+      if (deps.nuxt) return "nuxtjs";
+      if (deps.gatsby) return "gatsby";
+    } catch (error) {
+      console.warn("Gagal auto detect framework:", error);
+    }
+    return null;
+  };
+
   const isTrialMode = localStorage.getItem("vercel_token") === "TRIAL_MODE_ACTIVE";
   const hasUserToken = !!localStorage.getItem("vercel_token") && !isTrialMode;
   const isDemo = appMode === "demo";
 
   const frameworks = [
+    { id: "auto", name: "Auto Detect" },
     { id: null, name: "Other (Static)" },
     { id: "nextjs", name: "Next.js" },
     { id: "vite", name: "Vite" },
@@ -82,7 +101,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   useEffect(() => {
     loadFiles();
     loadRepositories();
-    setFramework(localStorage.getItem(`framework_${projectName}`) || null);
+    setFramework(localStorage.getItem(`framework_${projectName}`) || "auto");
     setDeployedUrl(localStorage.getItem(`deployed_url_${projectName}`) || null);
   }, [projectName]);
 
@@ -167,15 +186,10 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = e.target.files;
     if (!uploadedFiles) return;
-
-    const saveToRepo = confirm("Simpan hasil ekstrak ke repository? Klik Batal untuk editor tab saja.");
-    let targetProject = projectName;
-    if (saveToRepo && (projectName === "default-project" || projectName.startsWith("temp-"))) {
-      const repoName = prompt("Nama repository untuk hasil ekstrak:");
-      if (!repoName) return;
-      targetProject = repoName;
-      setProjectName(repoName);
-      if (!projectTabs.includes(repoName)) setProjectTabs(prev => [...prev, repoName]);
+    const targetProject = projectName === "default-project" ? `repo-${Date.now()}` : projectName;
+    if (projectName === "default-project") {
+      setProjectName(targetProject);
+      setProjectTabs(prev => (prev.includes(targetProject) ? prev : [...prev, targetProject]));
     }
 
     setIsExtracting(true);
@@ -222,21 +236,14 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       }
 
       if (filesToInsert.length > 0) {
-        if (!saveToRepo) {
-          targetProject = `temp-${Date.now()}`;
-          filesToInsert.forEach(f => (f.projectId = targetProject));
-          setProjectTabs(prev => [...prev, targetProject]);
-          setProjectName(targetProject);
-        } else {
-          await db.projects.put({
-            id: targetProject,
-            name: targetProject,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            source: "import",
-            temporary: false
-          });
-        }
+        await db.projects.put({
+          id: targetProject,
+          name: targetProject,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          source: "import",
+          temporary: false
+        });
         await db.files.bulkAdd(filesToInsert);
         loadFiles();
         loadRepositories();
@@ -315,14 +322,20 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       toast.error("Mode Demo: Anda tidak dapat menghapus file.");
       return;
     }
-    if (!confirm("Yakin ingin menghapus file ini?")) return;
-    await db.files.delete(id);
-    if (activeFile?.id === id) {
-      setActiveFile(null);
-      setCode("");
-    }
-    loadFiles();
-    toast.success("File dihapus");
+    setConfirmState({
+      title: "Hapus file?",
+      description: "Tindakan ini tidak bisa dibatalkan.",
+      onConfirm: async () => {
+        await db.files.delete(id);
+        if (activeFile?.id === id) {
+          setActiveFile(null);
+          setCode("");
+        }
+        loadFiles();
+        toast.success("File dihapus");
+        setConfirmState(null);
+      }
+    });
   };
 
   const handleDeleteFolder = async (path: string, e: React.MouseEvent) => {
@@ -331,20 +344,22 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       toast.error("Mode Demo: Anda tidak dapat menghapus folder.");
       return;
     }
-    if (!confirm(`Yakin ingin menghapus folder "${path}" dan semua isinya?`)) return;
-    
-    const filesToDelete = files.filter(f => f.path === path || f.path.startsWith(path + "/"));
-    const ids = filesToDelete.map(f => f.id!).filter(id => id !== undefined);
-    
-    await db.files.bulkDelete(ids);
-    
-    if (activeFile && filesToDelete.some(f => f.id === activeFile.id)) {
-      setActiveFile(null);
-      setCode("");
-    }
-    
-    loadFiles();
-    toast.success("Folder dihapus");
+    setConfirmState({
+      title: `Hapus folder "${path}"?`,
+      description: "Semua file di dalam folder ini akan ikut terhapus.",
+      onConfirm: async () => {
+        const filesToDelete = files.filter(f => f.path === path || f.path.startsWith(path + "/"));
+        const ids = filesToDelete.map(f => f.id!).filter(id => id !== undefined);
+        await db.files.bulkDelete(ids);
+        if (activeFile && filesToDelete.some(f => f.id === activeFile.id)) {
+          setActiveFile(null);
+          setCode("");
+        }
+        loadFiles();
+        toast.success("Folder dihapus");
+        setConfirmState(null);
+      }
+    });
   };
 
   const handleRenameFile = async (oldPath: string, newName: string) => {
@@ -630,6 +645,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         ? domainName.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 63)
         : "";
 
+      const selectedFramework = framework === "auto" ? detectFrameworkFromFiles(allFiles) : (framework || null);
       const response = await fetch("https://api.vercel.com/v13/deployments", {
         method: "POST",
         headers: {
@@ -644,7 +660,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             encoding: "base64"
           })),
           projectSettings: {
-            framework: framework || null
+            framework: selectedFramework
           }
         })
       });
@@ -653,6 +669,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       if (response.ok) {
         setDeployedUrl(data.url);
         localStorage.setItem(`deployed_url_${projectName}`, data.url);
+        localStorage.setItem(`framework_${projectName}`, framework || "auto");
         
         // Mark project as deployed in DB
         const project = await db.projects.get(projectName);
@@ -697,9 +714,19 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 toast.error("Mode Demo: Anda tidak dapat menggunakan Coding Manual.");
                 return;
               }
-              setShowRenameModal({ type: "project", oldPath: "" });
-              setNewName("");
-              // We'll use the rename modal to get the project name
+              const generatedProject = `manual-${Date.now()}`;
+              setProjectName(generatedProject);
+              setProjectTabs(prev => (prev.includes(generatedProject) ? prev : [...prev, generatedProject]));
+              db.projects.put({
+                id: generatedProject,
+                name: generatedProject,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                source: "manual",
+                temporary: false
+              });
+              setEditorMode("editor");
+              toast.success("Proyek coding manual dibuat.");
             }}
             className={cn(
               "group p-6 md:p-8 rounded-[32px] md:rounded-[40px] bg-white/5 border border-white/10 transition-all text-left space-y-4 min-h-[160px]",
@@ -733,15 +760,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
               await handleFileUpload(e);
               setEditorMode("editor");
             }} />
-            <button 
-              onClick={() => {
-                const name = prompt("Beri nama proyek untuk unggahan ini:");
-                if (!name) return;
-                setProjectName(name);
-                document.getElementById("menu-upload")?.click();
-              }}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
+            <button onClick={() => document.getElementById("menu-upload")?.click()} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
           </label>
 
           <button 
@@ -750,11 +769,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 toast.error("Mode Demo: Anda tidak dapat memuat repositori.");
                 return;
               }
-              const id = prompt("Masukkan ID proyek untuk memuat:");
-              if (id) {
-                setProjectName(id);
-                setEditorMode("editor");
-              }
+              setEditorMode("editor");
             }}
             className={cn(
               "group p-6 md:p-8 rounded-[32px] md:rounded-[40px] bg-white/5 border border-white/10 transition-all text-left space-y-4 min-h-[160px]",
@@ -773,17 +788,41 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-3">Repository Tersimpan</p>
             <div className="space-y-2">
               {repositories.map((repo) => (
-                <button
-                  key={repo.id}
-                  onClick={() => {
-                    setProjectName(repo.id);
-                    setEditorMode("editor");
-                    setProjectTabs(prev => (prev.includes(repo.id) ? prev : [...prev, repo.id]));
-                  }}
-                  className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10"
-                >
-                  <p className="text-sm font-bold text-white">{repo.name}</p>
-                </button>
+                <div key={repo.id} className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-between gap-3">
+                  <button
+                    onClick={() => {
+                      setProjectName(repo.id);
+                      setEditorMode("editor");
+                      setProjectTabs(prev => (prev.includes(repo.id) ? prev : [...prev, repo.id]));
+                    }}
+                    className="flex items-center gap-2 min-w-0"
+                  >
+                    <FolderGit2 className="w-4 h-4 text-blue-400 shrink-0" />
+                    <p className="text-sm font-bold text-white truncate">{repo.name}</p>
+                  </button>
+                  <button
+                    onClick={() =>
+                      setConfirmState({
+                        title: `Hapus repository "${repo.name}"?`,
+                        description: "Histori repo dan semua file lokal akan dihapus.",
+                        onConfirm: async () => {
+                          await db.files.where("projectId").equals(repo.id).delete();
+                          await db.projects.delete(repo.id);
+                          await loadRepositories();
+                          if (projectName === repo.id) {
+                            setProjectName("default-project");
+                            setEditorMode("menu");
+                          }
+                          setConfirmState(null);
+                          toast.success("Repository dihapus.");
+                        }
+                      })
+                    }
+                    className="p-2 text-white/30 hover:text-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -811,7 +850,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   }
 
   return (
-    <div className="flex h-[calc(100vh-100px)] md:h-screen bg-black overflow-hidden relative">
+    <div className="flex h-[calc(100dvh-56px)] md:h-[100dvh] bg-black overflow-hidden relative">
       {/* Back to Menu Button (Mobile) */}
       <button 
         onClick={() => setEditorMode("menu")}
@@ -833,13 +872,10 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-xs text-white/40 font-mono uppercase">Project Name</label>
-                <input 
-                  type="text"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none transition-all"
-                />
+                <label className="text-xs text-white/40 font-mono uppercase">Repository</label>
+                <div className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white/80 text-sm">
+                  {projectName}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -969,16 +1005,27 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                   <button onClick={() => setProjectName(tab)}>{tab}</button>
                   <button onClick={async () => {
                     const projectFiles = await db.files.where("projectId").equals(tab).toArray();
-                    if (projectFiles.some(f => f.updatedAt > Date.now() - 5 * 60 * 1000) && !confirm("Tutup tab? Perubahan yang belum disimpan ke repository bisa hilang.")) return;
-                    if (tab.startsWith("temp-")) {
-                      await db.files.where("projectId").equals(tab).delete();
+                    const closeTab = async () => {
+                      if (tab.startsWith("temp-")) {
+                        await db.files.where("projectId").equals(tab).delete();
+                      }
+                      setProjectTabs(prev => prev.filter(t => t !== tab));
+                      if (projectName === tab) {
+                        const remain = projectTabs.filter(t => t !== tab);
+                        if (remain.length) setProjectName(remain[0]);
+                        else setEditorMode("menu");
+                      }
+                      setConfirmState(null);
+                    };
+                    if (projectFiles.some(f => f.updatedAt > Date.now() - 5 * 60 * 1000)) {
+                      setConfirmState({
+                        title: "Tutup tab?",
+                        description: "Perubahan terbaru mungkin belum disimpan.",
+                        onConfirm: closeTab
+                      });
+                      return;
                     }
-                    setProjectTabs(prev => prev.filter(t => t !== tab));
-                    if (projectName === tab) {
-                      const remain = projectTabs.filter(t => t !== tab);
-                      if (remain.length) setProjectName(remain[0]);
-                      else setEditorMode("menu");
-                    }
+                    await closeTab();
                   }}>×</button>
                 </div>
               ))}
@@ -1050,14 +1097,14 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                     <span className="text-xs font-medium text-white/60">{activeFile.path}</span>
                   </div>
                 </div>
-                <div className="flex-1 overflow-hidden editor-container">
+                <div className="flex-1 overflow-hidden editor-container min-h-0">
                   <CodeMirror
                     value={code}
                     height="100%"
                     theme="dark"
                     extensions={getLanguage(activeFile.path)}
                     onChange={(value) => setCode(value)}
-                    className="text-sm h-full"
+                    className="text-sm h-full min-h-0"
                   />
                 </div>
               </>
@@ -1220,6 +1267,31 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all"
               >
                 Buat File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmState && (
+        <div className="fixed inset-0 z-[140] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 space-y-5">
+            <div className="space-y-2">
+              <h4 className="text-lg font-bold text-white">{confirmState.title}</h4>
+              <p className="text-sm text-white/50">{confirmState.description}</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmState(null)}
+                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-semibold"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmState.onConfirm}
+                className="flex-1 py-3 rounded-xl bg-red-500/90 hover:bg-red-500 text-white text-sm font-semibold"
+              >
+                Ya, lanjutkan
               </button>
             </div>
           </div>
