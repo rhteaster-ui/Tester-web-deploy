@@ -72,7 +72,7 @@ export function VercelLogs() {
         
         <div className="md:col-span-2 flex gap-2">
           <button 
-            onClick={() => copyToClipboard(deploymentId)}
+            onClick={() => copyToClipboard(`https://${deploymentId}.vercel.app`)}
             disabled={!deploymentId}
             className="flex-1 p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-all text-[10px] md:text-xs font-bold disabled:opacity-50 min-h-[40px]"
           >
