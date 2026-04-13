@@ -7,7 +7,6 @@ import React, { useState, useEffect } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { BottomNav } from "./components/layout/BottomNav";
 import { DeploymentPanel } from "./components/features/DeploymentPanel";
-import { AdminLogs } from "./components/features/AdminLogs";
 import { EditorModule } from "./components/features/EditorModule";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -607,7 +606,6 @@ export default function App() {
               {activeTab === "about" && <AboutTab />}
               {activeTab === "deploy" && <DeploymentPanel setActiveTab={handleTabChange} />}
               {activeTab === "editor" && <EditorModule setHasUnsavedChanges={setHasUnsavedChanges} appMode={appMode} />}
-              {activeTab === "logs" && <AdminLogs />}
               {activeTab === "settings" && <div className="p-8 text-white/50 italic">Memuat modul pengaturan...</div>}
             </motion.div>
           </AnimatePresence>
