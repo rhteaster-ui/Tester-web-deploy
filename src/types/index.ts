@@ -14,6 +14,7 @@ export interface Project {
   updatedAt?: number;
   lastDeployedAt?: number;
   deploymentUrl?: string;
+  deploymentId?: string;
   isDeployed?: boolean;
   source?: "manual" | "import";
   temporary?: boolean;
