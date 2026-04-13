@@ -546,6 +546,11 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     const token = localStorage.getItem("vercel_token");
     const usingServerToken = !token || token === "TRIAL_MODE_ACTIVE";
 
+    if (usingServerToken) {
+      toast.error("Token Vercel wajib diisi. Mode demo tidak dapat melakukan deploy nyata.");
+      return;
+    }
+
     setIsDeploying(true);
     try {
       const allFiles = await db.files.where("projectId").equals(projectName).toArray();
@@ -625,16 +630,23 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         ? domainName.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 63)
         : "";
 
-      const response = await fetch("/api/deploy", {
+      const response = await fetch("https://api.vercel.com/v13/deployments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          files: payloadFiles, 
-          projectName, 
-          token: usingServerToken ? "" : token,
-          framework,
-          domainName: sanitizedDomain || undefined
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: sanitizedDomain || projectName,
+          files: payloadFiles.map((file) => ({
+            file: file.path,
+            data: file.content,
+            encoding: "base64"
+          })),
+          projectSettings: {
+            framework: framework || null
+          }
+        })
       });
 
       const data = await response.json();
@@ -658,7 +670,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           });
         }
 
-        toast.success(`Deployment live di ${data.url}${usingServerToken ? " (token server)" : ""}`);
+        toast.success(`Deployment live di ${data.url}`);
         window.open(`https://${data.url}`, "_blank");
         setShowDeployConfig(false);
         loadRepositories();
