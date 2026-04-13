@@ -3,7 +3,8 @@ import CodeMirror from "@uiw/react-codemirror";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { css } from "@codemirror/lang-css";
-import { Folder, Save, Trash2, ChevronRight, ChevronDown, FileCode, Rocket, Loader2, Code, Download, Eye, EyeOff, Maximize2, AlertCircle, MoreVertical, Upload, FilePlus, Globe, ArrowLeft, ShieldCheck, FolderGit2 } from "lucide-react";
+import { EditorView } from "@codemirror/view";
+import { Folder, Save, Trash2, ChevronRight, ChevronDown, FileCode, Rocket, Loader2, Code, Download, Eye, EyeOff, Maximize2, AlertCircle, MoreVertical, Upload, FilePlus, ArrowLeft, ShieldCheck, FolderGit2 } from "lucide-react";
 import { db, type ProjectFile } from "@/src/lib/db";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
@@ -56,6 +57,17 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       binary += String.fromCharCode(...chunk);
     }
     return btoa(binary);
+  };
+
+  const normalizeVercelSubdomain = (value: string) => {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 63);
   };
 
   const detectFrameworkFromFiles = (projectFiles: ProjectFile[]) => {
@@ -401,6 +413,34 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     toast.success("Nama folder diperbarui");
   };
 
+  const handleRenameProject = async (newProjectName: string) => {
+    if (!newProjectName || newProjectName === projectName) return;
+    const previousName = projectName;
+    const projectFiles = await db.files.where("projectId").equals(previousName).toArray();
+    const existingProject = await db.projects.get(previousName);
+
+    if (existingProject) {
+      await db.projects.put({
+        ...existingProject,
+        id: newProjectName,
+        name: newProjectName,
+        updatedAt: Date.now()
+      });
+      await db.projects.delete(previousName);
+    }
+
+    for (const file of projectFiles) {
+      await db.files.update(file.id!, { projectId: newProjectName, updatedAt: Date.now() });
+    }
+
+    setProjectName(newProjectName);
+    localStorage.setItem("current_project_id", newProjectName);
+    setProjectTabs(prev => prev.map((tab) => (tab === previousName ? newProjectName : tab)));
+    toast.success("Nama repository diperbarui");
+    loadFiles();
+    loadRepositories();
+  };
+
   const buildFileTree = (files: ProjectFile[]) => {
     const root: any = { name: "root", type: "folder", children: [], path: "" };
     
@@ -561,11 +601,6 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     const token = localStorage.getItem("vercel_token");
     const usingServerToken = !token || token === "TRIAL_MODE_ACTIVE";
 
-    if (usingServerToken) {
-      toast.error("Token Vercel wajib diisi. Mode demo tidak dapat melakukan deploy nyata.");
-      return;
-    }
-
     setIsDeploying(true);
     try {
       const allFiles = await db.files.where("projectId").equals(projectName).toArray();
@@ -641,27 +676,20 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         }
       }
 
-      const sanitizedDomain = domainName
-        ? domainName.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 63)
-        : "";
+      const sanitizedDomain = domainName ? normalizeVercelSubdomain(domainName) : "";
 
       const selectedFramework = framework === "auto" ? detectFrameworkFromFiles(allFiles) : (framework || null);
-      const response = await fetch("https://api.vercel.com/v13/deployments", {
+      const response = await fetch("/api/deploy", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: sanitizedDomain || projectName,
+          projectName: sanitizedDomain || projectName,
+          token: usingServerToken ? undefined : token,
+          framework: selectedFramework,
           files: payloadFiles.map((file) => ({
-            file: file.path,
-            data: file.content,
-            encoding: "base64"
-          })),
-          projectSettings: {
-            framework: selectedFramework
-          }
+            path: file.path,
+            content: file.content
+          }))
         })
       });
 
@@ -763,29 +791,11 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             <button onClick={() => document.getElementById("menu-upload")?.click()} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
           </label>
 
-          <button 
-            onClick={() => {
-              if (isDemo) {
-                toast.error("Mode Demo: Anda tidak dapat memuat repositori.");
-                return;
-              }
-              setEditorMode("editor");
-            }}
-            className={cn(
-              "group p-6 md:p-8 rounded-[32px] md:rounded-[40px] bg-white/5 border border-white/10 transition-all text-left space-y-4 min-h-[160px]",
-              isDemo ? "opacity-50 cursor-not-allowed" : "hover:border-purple-500/50"
-            )}
-          >
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Globe className="w-6 h-6 md:w-8 md:h-8" />
+          <div className="md:col-span-2 p-4 rounded-3xl bg-white/5 border border-white/10 max-h-64 overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Select Repository</p>
+              <span className="text-[10px] text-white/30">{repositories.length} repo</span>
             </div>
-            <div>
-              <h3 className="text-lg md:text-xl font-bold text-white">Select Repository</h3>
-              <p className="text-xs md:text-sm text-white/40">Muat proyek yang ada dari database lokal Anda.</p>
-            </div>
-          </button>
-          <div className="md:col-span-2 p-4 rounded-3xl bg-white/5 border border-white/10 max-h-48 overflow-y-auto">
-            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-3">Repository Tersimpan</p>
             <div className="space-y-2">
               {repositories.map((repo) => (
                 <div key={repo.id} className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-between gap-3">
@@ -850,11 +860,11 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   }
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] md:h-[100dvh] bg-black overflow-hidden relative">
+      <div className="mx-auto w-full max-w-[1600px] flex h-[calc(100dvh-56px)] md:h-[100dvh] bg-black overflow-hidden relative">
       {/* Back to Menu Button (Mobile) */}
       <button 
         onClick={() => setEditorMode("menu")}
-        className="md:hidden absolute top-16 left-4 z-50 p-2 bg-white/10 backdrop-blur-md rounded-full text-white"
+        className="md:hidden absolute bottom-20 left-4 z-50 p-2.5 bg-white/10 backdrop-blur-md rounded-full text-white border border-white/10 shadow-lg"
       >
         <ArrowLeft className="w-5 h-5" />
       </button>
@@ -895,10 +905,13 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 <input
                   type="text"
                   value={domainName}
-                  onChange={(e) => setDomainName(e.target.value)}
+                  onChange={(e) => setDomainName(normalizeVercelSubdomain(e.target.value))}
                   placeholder="nama-domain-vercel"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none transition-all"
                 />
+                <p className="text-[10px] text-white/40">
+                  Auto format: huruf besar→kecil, spasi→"-", karakter lain dihapus.
+                </p>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
@@ -1102,8 +1115,14 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                     value={code}
                     height="100%"
                     theme="dark"
-                    extensions={getLanguage(activeFile.path)}
-                    onChange={(value) => setCode(value)}
+                    extensions={[
+                      ...getLanguage(activeFile.path),
+                      EditorView.lineWrapping,
+                      EditorView.editable.of(!isDemo)
+                    ]}
+                    onChange={(value) => {
+                      if (!isDemo) setCode(value);
+                    }}
                     className="text-sm h-full min-h-0"
                   />
                 </div>
@@ -1206,8 +1225,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 onClick={async () => {
                   if (!newName) return;
                   if (showRenameModal.type === "project") {
-                    setProjectName(newName);
-                    setEditorMode("editor");
+                    await handleRenameProject(newName);
                   } else if (showRenameModal.type === "file") {
                     await handleRenameFile(showRenameModal.oldPath, newName);
                   } else if (showRenameModal.type === "folder") {

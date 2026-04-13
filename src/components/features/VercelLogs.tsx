@@ -22,6 +22,14 @@ export function VercelLogs() {
     loadProjects();
   }, []);
 
+  useEffect(() => {
+    if (!selectedProject) return;
+    const project = projects.find((p) => p.id === selectedProject);
+    if (project?.deploymentUrl) {
+      setDeploymentId(project.deploymentUrl.replace(".vercel.app", ""));
+    }
+  }, [selectedProject, projects]);
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Berhasil disalin!");
@@ -56,7 +64,7 @@ export function VercelLogs() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-6xl mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4">
           <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">

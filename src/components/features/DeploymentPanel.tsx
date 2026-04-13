@@ -12,7 +12,6 @@ interface DeploymentPanelProps {
 export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
   const [token, setToken] = useState(localStorage.getItem("vercel_token") || "");
   const [projectName, setProjectName] = useState("");
-  const [frameworkPreset, setFrameworkPreset] = useState("auto");
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<any>(null);
   const isUsingDemoMode = !token || token === "TRIAL_MODE_ACTIVE";
@@ -101,7 +100,7 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
         }
       }
 
-      const detectedFramework = frameworkPreset === "auto" ? detectFramework(filesForDirectDeploy) : (frameworkPreset || null);
+      const detectedFramework = detectFramework(filesForDirectDeploy);
       if (detectedFramework) {
         toast.info(`Framework terdeteksi: ${detectedFramework}`);
       }
@@ -224,24 +223,14 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Framework</label>
-                  <select
-                    value={frameworkPreset}
-                    onChange={(e) => setFrameworkPreset(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-purple-500 outline-none transition-all shadow-inner min-h-[56px]"
-                  >
-                    <option value="auto">Auto Detect</option>
-                    <option value="">Other (Static)</option>
-                    <option value="nextjs">Next.js</option>
-                    <option value="vite">Vite</option>
-                    <option value="create-react-app">Create React App</option>
-                    <option value="nuxtjs">Nuxt.js</option>
-                    <option value="gatsby">Gatsby</option>
-                  </select>
+                  <label className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Teknologi</label>
+                  <div className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white/70 text-sm shadow-inner min-h-[56px]">
+                    Pilih teknologi saat klik Deploy di halaman Editor
+                  </div>
                 </div>
                 <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10">
                   <p className="text-[10px] text-purple-400/60 leading-relaxed">
-                    Nama repo akan dibuat otomatis jika kosong. Framework bisa Auto Detect atau manual.
+                    Nama repo akan dibuat otomatis jika kosong. Framework bisa diatur di modal deploy Editor.
                   </p>
                 </div>
               </div>

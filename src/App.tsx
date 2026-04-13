@@ -43,11 +43,16 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
       isTrial: mode === "demo" || value === "TRIAL_MODE_ACTIVE",
       isActive: false
     };
-    await db.tokens.add(newToken);
+    const id = await db.tokens.add(newToken);
+    await db.tokens.toCollection().modify({ isActive: false });
+    await db.tokens.update(id, { isActive: true });
+    localStorage.setItem("vercel_token", newToken.value);
+    localStorage.setItem("app_mode", newToken.isTrial ? "demo" : "token");
+    onSelect({ ...newToken, id });
     setName("");
     setValue("");
     loadTokens();
-    toast.success("Akun token ditambahkan");
+    toast.success("Akun token ditambahkan & langsung aktif");
   };
 
   const handleDelete = async (id: number) => {
@@ -68,28 +73,28 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <h3 className="text-xl font-bold text-white">Kelola Akun Token</h3>
-        <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+        <h3 className="text-lg font-bold text-white">Kelola Akun Token</h3>
+        <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/10 rounded-lg">
           <button
             onClick={() => setMode("token")}
-            className={cn("py-2 rounded-lg text-xs font-bold transition-all", mode === "token" ? "bg-white/10 text-white" : "text-white/50")}
+            className={cn("py-1.5 rounded-lg text-[11px] font-bold transition-all", mode === "token" ? "bg-white/10 text-white" : "text-white/50")}
           >
             Trial / Non Trial
           </button>
           <button
             onClick={() => setMode("demo")}
-            className={cn("py-2 rounded-lg text-xs font-bold transition-all", mode === "demo" ? "bg-blue-500/20 text-blue-400" : "text-white/50")}
+            className={cn("py-1.5 rounded-lg text-[11px] font-bold transition-all", mode === "demo" ? "bg-blue-500/20 text-blue-400" : "text-white/50")}
           >
             Demo
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <input 
             type="text" 
             placeholder="Nama Akun (ex: Akun Utama)" 
             value={name}
             onChange={e => setName(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-blue-500"
           />
           <input 
             type="password" 
@@ -97,18 +102,18 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
             value={value}
             onChange={e => setValue(e.target.value)}
             disabled={mode === "demo"}
-            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-blue-500"
           />
         </div>
         <button 
           onClick={handleAdd}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all"
+          className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl transition-all"
         >
           Tambah Akun
         </button>
       </div>
 
-      <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-2 custom-scrollbar">
         {tokens.map(t => (
           <div key={t.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 group">
             <div className="flex items-center gap-3">
@@ -138,7 +143,7 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
           </div>
         ))}
         {tokens.length === 0 && (
-          <div className="text-center py-8 text-white/20 italic text-sm">Belum ada akun token.</div>
+          <div className="text-center py-6 text-white/20 italic text-xs">Belum ada akun token.</div>
         )}
       </div>
     </div>
@@ -393,8 +398,8 @@ const AboutTab = () => (
             <p className="text-blue-400 font-bold uppercase tracking-[0.2em] text-xs">Lead Product Architect</p>
           </div>
           <p className="text-white/40 text-sm leading-relaxed max-w-xl">
-            Sangat bersemangat dalam membangun alat web berkinerja tinggi dan infrastruktur deployment. 
-            Berfokus pada menciptakan pengalaman pengembang yang mulus melalui solusi headless yang inovatif.
+            Passionate about building high-performance web tools and modern deployment infrastructure. 
+            Fokus utama: developer experience yang clean, fast, and reliable lewat pendekatan headless yang practical.
           </p>
         </div>
       </div>
@@ -450,9 +455,9 @@ const AboutTab = () => (
         </div>
 
         <div className="flex items-center justify-center gap-2 text-white/20 text-[10px] font-bold uppercase tracking-[0.3em]">
-          <span>Created Solo</span>
+          <span>Create with</span>
           <Heart className="w-3 h-3 fill-current" />
-          <span>By R_hmt Ofc</span>
+          <span>R_hmt Ofc</span>
         </div>
       </div>
     </section>
@@ -469,7 +474,7 @@ export default function App() {
 
   useEffect(() => {
     const checkActiveToken = async () => {
-      const active = await db.tokens.where("isActive").equals(1).first();
+      const active = await db.tokens.where("isActive").equals(true).first();
       if (active) {
         setActiveTokenName(active.name);
         setAppMode(active.isTrial ? "demo" : "token");
@@ -511,7 +516,7 @@ export default function App() {
       {/* Initial Mode Selection Modal */}
       {!appMode && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl pointer-events-auto">
-          <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 md:p-12 space-y-8 shadow-2xl relative overflow-hidden isolate pointer-events-auto">
+          <div className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[30px] p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden isolate pointer-events-auto">
             <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none select-none">
               <Rocket className="w-64 h-64 text-white rotate-12" />
             </div>
