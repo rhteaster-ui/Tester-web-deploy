@@ -141,6 +141,7 @@ async function startServer() {
         },
         body: JSON.stringify({
           name: projectName,
+          target: "production",
           files: files.map((f: any) => ({
             file: f.path,
             data: f.content,
@@ -153,6 +154,9 @@ async function startServer() {
       });
 
       const data = await response.json();
+      const normalizedUrl = typeof data?.url === "string"
+        ? data.url.replace(/^https?:\/\//i, "").replace(/\/+$/, "")
+        : undefined;
       
       await logActivity("deploy", response.ok ? "success" : "error", {
         projectName,
@@ -162,7 +166,10 @@ async function startServer() {
         await incrementMetric("deploys", 1);
       }
 
-      res.status(response.status).json(data);
+      res.status(response.status).json({
+        ...data,
+        url: normalizedUrl || data?.url,
+      });
     } catch (error: any) {
       await logActivity("deploy", "error", { error: error.message });
       res.status(500).json({ error: error.message });

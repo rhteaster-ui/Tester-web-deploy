@@ -34,6 +34,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [newName, setNewName] = useState("");
   const [newFilePath, setNewFilePath] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["root"]));
+  const [rawDomainInput, setRawDomainInput] = useState("");
 
   useEffect(() => {
     // Reset blocking states on mount
@@ -45,7 +46,6 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [editorMode, setEditorMode] = useState<"menu" | "editor">("menu");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<any[]>([]);
-  const [domainName, setDomainName] = useState("");
   const [confirmState, setConfirmState] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
 
   const toBase64 = (value: string) => {
@@ -68,6 +68,11 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 63);
+  };
+
+  const formatDeployedUrl = (url?: string | null) => {
+    if (!url) return null;
+    return url.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   };
 
   const detectFrameworkFromFiles = (projectFiles: ProjectFile[]) => {
@@ -676,7 +681,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         }
       }
 
-      const sanitizedDomain = domainName ? normalizeVercelSubdomain(domainName) : "";
+      const sanitizedDomain = rawDomainInput ? normalizeVercelSubdomain(rawDomainInput) : "";
 
       const selectedFramework = framework === "auto" ? detectFrameworkFromFiles(allFiles) : (framework || null);
       const response = await fetch("/api/deploy", {
@@ -695,14 +700,17 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
 
       const data = await response.json();
       if (response.ok) {
-        setDeployedUrl(data.url);
-        localStorage.setItem(`deployed_url_${projectName}`, data.url);
+        const cleanedUrl = formatDeployedUrl(data.url);
+        setDeployedUrl(cleanedUrl);
+        if (cleanedUrl) {
+          localStorage.setItem(`deployed_url_${projectName}`, cleanedUrl);
+        }
         localStorage.setItem(`framework_${projectName}`, framework || "auto");
         
         // Mark project as deployed in DB
         const project = await db.projects.get(projectName);
         if (project) {
-          await db.projects.update(projectName, { isDeployed: true, lastDeployedAt: Date.now(), deploymentUrl: data.url, updatedAt: Date.now() });
+          await db.projects.update(projectName, { isDeployed: true, lastDeployedAt: Date.now(), deploymentUrl: cleanedUrl || undefined, deploymentId: data.id, updatedAt: Date.now() });
         } else {
           await db.projects.add({
             id: projectName,
@@ -710,13 +718,16 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             createdAt: Date.now(),
             isDeployed: true,
             lastDeployedAt: Date.now(),
-            deploymentUrl: data.url,
+            deploymentUrl: cleanedUrl || undefined,
+            deploymentId: data.id,
             source: "manual"
           });
         }
 
-        toast.success(`Deployment live di ${data.url}`);
-        window.open(`https://${data.url}`, "_blank");
+        toast.success(`Deployment live di ${cleanedUrl}`);
+        if (cleanedUrl) {
+          window.open(`https://${cleanedUrl}`, "_blank");
+        }
         setShowDeployConfig(false);
         loadRepositories();
       } else {
@@ -860,14 +871,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   }
 
   return (
-      <div className="mx-auto w-full max-w-[1600px] flex h-[calc(100dvh-56px)] md:h-[100dvh] bg-black overflow-hidden relative">
-      {/* Back to Menu Button (Mobile) */}
-      <button 
-        onClick={() => setEditorMode("menu")}
-        className="md:hidden absolute bottom-20 left-4 z-50 p-2.5 bg-white/10 backdrop-blur-md rounded-full text-white border border-white/10 shadow-lg"
-      >
-        <ArrowLeft className="w-5 h-5" />
-      </button>
+      <div className="mx-auto w-full max-w-[1600px] flex h-[calc(100dvh-112px)] md:h-[100dvh] bg-black overflow-hidden relative pb-16 md:pb-0">
 
       {/* Deployment Config Modal */}
       {showDeployConfig && (
@@ -904,13 +908,16 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 <label className="text-xs text-white/40 font-mono uppercase">Custom Domain (opsional)</label>
                 <input
                   type="text"
-                  value={domainName}
-                  onChange={(e) => setDomainName(normalizeVercelSubdomain(e.target.value))}
+                  value={rawDomainInput}
+                  onChange={(e) => setRawDomainInput(e.target.value.replace(/[^a-zA-Z0-9-\s]/g, ""))}
                   placeholder="nama-domain-vercel"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none transition-all"
                 />
                 <p className="text-[10px] text-white/40">
-                  Auto format: huruf besar→kecil, spasi→"-", karakter lain dihapus.
+                  Auto format saat deploy: huruf besar→kecil, spasi→"-", karakter lain dihapus.
+                </p>
+                <p className="text-[10px] text-blue-400/80">
+                  Hasil: {normalizeVercelSubdomain(rawDomainInput) || "-"}
                 </p>
               </div>
 
@@ -1154,7 +1161,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                   </div>
                   <span className="text-[10px] font-bold text-black/40 uppercase tracking-widest ml-2">Live Preview</span>
                 </div>
-                <button 
+                <button
                   onClick={() => window.open(previewUrl || "", "_blank")}
                   className="p-1.5 hover:bg-black/5 rounded-lg text-black/40 transition-all"
                 >
@@ -1182,6 +1189,40 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="md:hidden fixed bottom-14 left-0 right-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+        <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-black/85 backdrop-blur-xl p-2">
+          <button
+            onClick={() => setEditorMode("menu")}
+            className="flex items-center justify-center gap-1 rounded-xl bg-white/5 py-2 text-[10px] font-bold text-white/80"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Menu
+          </button>
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className="flex items-center justify-center gap-1 rounded-xl bg-white/5 py-2 text-[10px] font-bold text-white/80"
+          >
+            {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            Preview
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!activeFile || isDemo}
+            className="flex items-center justify-center gap-1 rounded-xl bg-white/5 py-2 text-[10px] font-bold text-white/80 disabled:opacity-50"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Simpan
+          </button>
+          <button
+            onClick={() => setShowDeployConfig(true)}
+            className="flex items-center justify-center gap-1 rounded-xl bg-blue-600 py-2 text-[10px] font-bold text-white"
+          >
+            <Rocket className="w-3.5 h-3.5" />
+            Deploy
+          </button>
         </div>
       </div>
 

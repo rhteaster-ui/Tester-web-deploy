@@ -25,8 +25,13 @@ export function VercelLogs() {
   useEffect(() => {
     if (!selectedProject) return;
     const project = projects.find((p) => p.id === selectedProject);
+    if (project?.deploymentId) {
+      setDeploymentId(project.deploymentId);
+      return;
+    }
     if (project?.deploymentUrl) {
-      setDeploymentId(project.deploymentUrl.replace(".vercel.app", ""));
+      const normalized = String(project.deploymentUrl).replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+      setDeploymentId(normalized.replace(".vercel.app", ""));
     }
   }, [selectedProject, projects]);
 
@@ -64,7 +69,7 @@ export function VercelLogs() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-5xl mx-auto pb-24 md:pb-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4">
           <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
@@ -147,12 +152,12 @@ export function VercelLogs() {
           </div>
         </div>
         
-        <div className="p-6 font-mono text-xs h-[400px] overflow-y-auto space-y-1 custom-scrollbar bg-[#050505]">
+        <div className="p-4 md:p-6 font-mono text-xs h-[400px] overflow-y-auto overflow-x-hidden space-y-1 custom-scrollbar bg-[#050505]">
           {events.map((event, i) => (
-            <div key={i} className="flex gap-4 group">
+            <div key={i} className="flex gap-3 md:gap-4 group min-w-0">
               <span className="text-white/20 shrink-0">[{new Date(event.created).toLocaleTimeString()}]</span>
               <span className={cn(
-                "flex-1 break-all",
+                "flex-1 break-words min-w-0",
                 event.type === "error" ? "text-red-400" : "text-white/70"
               )}>
                 {event.text}
