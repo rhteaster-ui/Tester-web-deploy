@@ -6,6 +6,7 @@ import { db } from "@/src/lib/db";
 
 export function VercelLogs() {
   const [deploymentId, setDeploymentId] = useState("");
+  const [deploymentUrl, setDeploymentUrl] = useState("");
   const [events, setEvents] = useState<any[]>([]);
   const [isPolling, setIsPolling] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
@@ -43,8 +44,8 @@ export function VercelLogs() {
       if (response.ok) {
         setEvents(data);
       } else {
-        const errorMsg = typeof data.error === "string" 
-          ? data.error 
+        const errorMsg = typeof data.error === "string"
+          ? data.error
           : (data.error?.message || "Gagal mengambil log build");
         toast.error(errorMsg);
       }
@@ -69,19 +70,19 @@ export function VercelLogs() {
             </p>
           </div>
         </div>
-        
+
         <div className="md:col-span-2 flex gap-2">
-          <button 
-            onClick={() => copyToClipboard(deploymentId)}
-            disabled={!deploymentId}
+          <button
+            onClick={() => copyToClipboard(deploymentUrl)}
+            disabled={!deploymentUrl}
             className="flex-1 p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-all text-[10px] md:text-xs font-bold disabled:opacity-50 min-h-[40px]"
           >
             <Copy className="w-4 h-4" />
             Salin Tautan
           </button>
-          <button 
-            onClick={() => window.open(`https://${deploymentId}.vercel.app`, "_blank")}
-            disabled={!deploymentId}
+          <button
+            onClick={() => window.open(deploymentUrl, "_blank")}
+            disabled={!deploymentUrl}
             className="flex-1 p-4 rounded-2xl bg-blue-600/10 border border-blue-600/20 text-blue-400 flex items-center justify-center gap-2 hover:bg-blue-600/20 transition-all text-[10px] md:text-xs font-bold disabled:opacity-50 min-h-[40px]"
           >
             <ExternalLink className="w-4 h-4" />
@@ -96,10 +97,10 @@ export function VercelLogs() {
             <Terminal className="w-5 h-5" />
             <h3 className="font-bold uppercase tracking-widest text-sm">Terminal Build</h3>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <ListFilter className="w-4 h-4 text-white/20" />
-            <select 
+            <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
               className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500 transition-all min-h-[32px]"
@@ -111,16 +112,23 @@ export function VercelLogs() {
             </select>
           </div>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-2">
-          <input 
+          <input
             type="text"
             value={deploymentId}
             onChange={(e) => setDeploymentId(e.target.value)}
             placeholder="ID Deployment (dpl_...)"
             className="flex-1 sm:max-w-[300px] bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 transition-all min-h-[48px]"
           />
-          <button 
+          <input
+            type="url"
+            value={deploymentUrl}
+            onChange={(e) => setDeploymentUrl(e.target.value)}
+            placeholder="URL publik (https://....vercel.app)"
+            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 transition-all min-h-[48px]"
+          />
+          <button
             onClick={fetchVercelLogs}
             disabled={isPolling}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 min-h-[48px]"
@@ -138,7 +146,7 @@ export function VercelLogs() {
             <span className="text-xs font-mono text-white/30">build_output.sh</span>
           </div>
         </div>
-        
+
         <div className="p-6 font-mono text-xs h-[400px] overflow-y-auto space-y-1 custom-scrollbar bg-[#050505]">
           {events.map((event, i) => (
             <div key={i} className="flex gap-4 group">
