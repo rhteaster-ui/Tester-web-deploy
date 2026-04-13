@@ -512,8 +512,8 @@ export default function App() {
       {/* Initial Mode Selection Modal */}
       {!appMode && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-          <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 md:p-12 space-y-8 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-12 opacity-5">
+          <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 md:p-12 space-y-8 shadow-2xl relative overflow-hidden isolate">
+            <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none select-none">
               <Rocket className="w-64 h-64 text-white rotate-12" />
             </div>
             
@@ -524,10 +524,12 @@ export default function App() {
               </p>
             </div>
 
-            <TokenManager onSelect={(token) => {
+            <div className="relative z-10">
+              <TokenManager onSelect={(token) => {
               setAppMode(token.isTrial ? "demo" : "token");
               setActiveTokenName(token.name);
-            }} />
+              }} />
+            </div>
 
             <div className="pt-4 text-center relative z-10">
               <a 
@@ -553,7 +555,8 @@ export default function App() {
             >
               <LogOut className="w-5 h-5" />
             </button>
-            <TokenManager onSelect={(token) => {
+            <div className="relative z-10">
+              <TokenManager onSelect={(token) => {
               setAppMode(token.isTrial ? "demo" : "token");
               setActiveTokenName(token.name);
               setShowTokenManager(false);
