@@ -549,10 +549,41 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
     setIsDeploying(true);
     try {
       const allFiles = await db.files.where("projectId").equals(projectName).toArray();
-      const payloadFiles = allFiles.map(f => ({
-        path: f.path,
+      const deployableFiles = allFiles.filter(f => !f.isFolder && f.content !== "FOLDER_MARKER");
+
+      if (deployableFiles.length === 0) {
+        toast.error("Tidak ada file yang bisa di-deploy. Pastikan proyek berisi file valid.");
+        return;
+      }
+
+      const normalizedFiles = deployableFiles.map((file) => ({
+        ...file,
+        path: file.path.replace(/^\.\//, "").replace(/\\/g, "/").replace(/^\/+/, "")
+      }));
+
+      const topLevelRoots = Array.from(new Set(
+        normalizedFiles
+          .map((file) => file.path.split("/")[0])
+          .filter(Boolean)
+      ));
+
+      const shouldStripSingleRootFolder =
+        topLevelRoots.length === 1 &&
+        normalizedFiles.every((file) => file.path.startsWith(`${topLevelRoots[0]}/`));
+
+      const payloadFiles = normalizedFiles.map(f => ({
+        path: shouldStripSingleRootFolder
+          ? f.path.replace(new RegExp(`^${topLevelRoots[0]}/`), "")
+          : f.path,
         content: toBase64(f.content) // Unicode-safe base64
       }));
+
+
+      const hasEntryFile = payloadFiles.some((file) => /(^|\/)index\.html$/i.test(file.path));
+      const hasPackageJson = payloadFiles.some((file) => /(^|\/)package\.json$/i.test(file.path));
+      if (!hasEntryFile && !hasPackageJson) {
+        toast.warning("Proyek tidak memiliki index.html atau package.json. Deployment bisa berhasil, tapi web mungkin tidak bisa dibuka.");
+      }
 
       // Inject PWA files if enabled and not present
       if (isPwaEnabled) {
