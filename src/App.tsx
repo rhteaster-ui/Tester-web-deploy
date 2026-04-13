@@ -511,8 +511,8 @@ export default function App() {
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-blue-500/30">
       {/* Initial Mode Selection Modal */}
       {!appMode && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-          <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 md:p-12 space-y-8 shadow-2xl relative overflow-hidden isolate">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl pointer-events-auto">
+          <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 md:p-12 space-y-8 shadow-2xl relative overflow-hidden isolate pointer-events-auto">
             <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none select-none">
               <Rocket className="w-64 h-64 text-white rotate-12" />
             </div>
@@ -525,10 +525,12 @@ export default function App() {
             </div>
 
             <div className="relative z-10">
-              <TokenManager onSelect={(token) => {
-              setAppMode(token.isTrial ? "demo" : "token");
-              setActiveTokenName(token.name);
-              }} />
+              <TokenManager
+                onSelect={(token) => {
+                  setAppMode(token.isTrial ? "demo" : "token");
+                  setActiveTokenName(token.name);
+                }}
+              />
             </div>
 
             <div className="pt-4 text-center relative z-10">
@@ -547,8 +549,8 @@ export default function App() {
 
       {/* Token Switcher Overlay */}
       {showTokenManager && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 space-y-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md pointer-events-auto">
+          <div className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 space-y-6 shadow-2xl relative pointer-events-auto">
             <button 
               onClick={() => setShowTokenManager(false)}
               className="absolute top-6 right-6 p-2 text-white/20 hover:text-white transition-all"
@@ -556,11 +558,14 @@ export default function App() {
               <LogOut className="w-5 h-5" />
             </button>
             <div className="relative z-10">
-              <TokenManager onSelect={(token) => {
-              setAppMode(token.isTrial ? "demo" : "token");
-              setActiveTokenName(token.name);
-              setShowTokenManager(false);
-            }} />
+              <TokenManager
+                onSelect={(token) => {
+                  setAppMode(token.isTrial ? "demo" : "token");
+                  setActiveTokenName(token.name);
+                  setShowTokenManager(false);
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
