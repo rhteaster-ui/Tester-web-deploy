@@ -48,6 +48,16 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
     setDeploymentResult(null);
 
     try {
+      const binaryExtensions = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|pdf|woff2?|ttf|otf|eot|mp3|wav|mp4|webm)$/i;
+      const getMimeTypeFromPath = (path: string) => {
+        const ext = path.split(".").pop()?.toLowerCase();
+        const mimeMap: Record<string, string> = {
+          png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+          bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif", pdf: "application/pdf", woff: "font/woff", woff2: "font/woff2",
+          ttf: "font/ttf", otf: "font/otf", eot: "application/vnd.ms-fontobject", mp3: "audio/mpeg", wav: "audio/wav", mp4: "video/mp4", webm: "video/webm"
+        };
+        return ext ? mimeMap[ext] || "application/octet-stream" : "application/octet-stream";
+      };
       const inferredName = projectName.trim() || `repo-${new Date().toISOString().replace(/[:.]/g, "-")}`;
       const filesToInsert: any[] = [];
       const filesForDirectDeploy: any[] = [];
@@ -61,11 +71,14 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
             if (!fileData.dir) {
               const textContent = await fileData.async("string");
               const base64Content = await fileData.async("base64");
+              const storedContent = binaryExtensions.test(path)
+                ? `data:${getMimeTypeFromPath(path)};base64,${base64Content}`
+                : textContent;
               
               filesToInsert.push({
                 projectId: inferredName,
                 path,
-                content: textContent,
+                content: storedContent,
                 isFolder: false,
                 updatedAt: Date.now()
               });
@@ -84,11 +97,18 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
             reader.onload = () => resolve((reader.result as string).split(",")[1]);
             reader.readAsDataURL(file);
           });
+          const storedContent = binaryExtensions.test(file.name)
+            ? await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.readAsDataURL(file);
+              })
+            : textContent;
 
           filesToInsert.push({
                 projectId: inferredName,
                 path: file.name,
-            content: textContent,
+            content: storedContent,
             isFolder: false,
             updatedAt: Date.now()
           });

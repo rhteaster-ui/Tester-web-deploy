@@ -8,6 +8,7 @@
 @layer base {
   body {
     @apply bg-black text-white antialiased;
+    overflow-x: hidden;
   }
 }
 

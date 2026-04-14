@@ -607,7 +607,7 @@ export default function App() {
       <div className="flex relative z-10">
         <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
         
-        <main className="flex-1 min-h-screen pb-20 md:pb-0">
+        <main className={cn("flex-1 min-h-screen md:pb-0", activeTab === "editor" ? "pb-14 overflow-x-hidden" : "pb-20")}>
           {/* Mobile Top Bar */}
           <div className="md:hidden flex items-center justify-between p-3 bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40">
             <div className="flex items-center gap-3">

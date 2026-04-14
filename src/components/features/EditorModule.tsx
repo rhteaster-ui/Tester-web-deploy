@@ -35,6 +35,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const [newFilePath, setNewFilePath] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["root"]));
   const [rawDomainInput, setRawDomainInput] = useState("");
+  const [showMobileExplorer, setShowMobileExplorer] = useState(false);
 
   useEffect(() => {
     // Reset blocking states on mount
@@ -73,6 +74,48 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   const formatDeployedUrl = (url?: string | null) => {
     if (!url) return null;
     return url.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  };
+
+  const imageExtensions = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i;
+  const binaryExtensions = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|pdf|woff2?|ttf|otf|eot|mp3|wav|mp4|webm)$/i;
+
+  const isImageFile = (path: string) => imageExtensions.test(path);
+  const isBinaryFile = (path: string) => binaryExtensions.test(path);
+  const isDataUrl = (value: string) => value.startsWith("data:");
+  const isImageDataUrl = (value: string) => value.startsWith("data:image/");
+
+  const getMimeTypeFromPath = (path: string) => {
+    const ext = path.split(".").pop()?.toLowerCase();
+    const mimeMap: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+      bmp: "image/bmp",
+      ico: "image/x-icon",
+      avif: "image/avif",
+      pdf: "application/pdf",
+      woff: "font/woff",
+      woff2: "font/woff2",
+      ttf: "font/ttf",
+      otf: "font/otf",
+      eot: "application/vnd.ms-fontobject",
+      mp3: "audio/mpeg",
+      wav: "audio/wav",
+      mp4: "video/mp4",
+      webm: "video/webm",
+    };
+    return ext ? mimeMap[ext] || "application/octet-stream" : "application/octet-stream";
+  };
+
+  const toDeployBase64Content = (content: string) => {
+    if (isDataUrl(content)) {
+      const commaIndex = content.indexOf(",");
+      return commaIndex >= 0 ? content.slice(commaIndex + 1) : content;
+    }
+    return toBase64(content);
   };
 
   const detectFrameworkFromFiles = (projectFiles: ProjectFile[]) => {
@@ -222,7 +265,9 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           
           for (const [path, zipEntry] of Object.entries(zipContent.files)) {
             if (!zipEntry.dir) {
-              const content = await zipEntry.async("text");
+              const content = isBinaryFile(path)
+                ? `data:${getMimeTypeFromPath(path)};base64,${await zipEntry.async("base64")}`
+                : await zipEntry.async("text");
               filesToInsert.push({
                 projectId: targetProject,
                 path,
@@ -241,7 +286,14 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
             }
           }
         } else {
-          const content = await file.text();
+          const content = isBinaryFile(file.name)
+            ? await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error(`Gagal membaca file biner: ${file.name}`));
+                reader.readAsDataURL(file);
+              })
+            : await file.text();
           filesToInsert.push({
             projectId: targetProject,
             path: file.name,
@@ -279,6 +331,10 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       return;
     }
     if (!activeFile) return;
+    if (isImageFile(activeFile.path) || isImageDataUrl(activeFile.content)) {
+      toast.info("File gambar tidak bisa diedit sebagai teks.");
+      return;
+    }
     await db.files.update(activeFile.id!, { content: code, updatedAt: Date.now() });
     await db.projects.put({
       id: projectName,
@@ -297,7 +353,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
 
   const selectFile = (file: ProjectFile) => {
     setActiveFile(file);
-    setCode(file.content);
+    setCode(isDataUrl(file.content) ? "" : file.content);
   };
 
   const getLanguage = (path: string) => {
@@ -315,7 +371,12 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       
       allFiles.forEach(file => {
         if (!file.isFolder) {
-          zip.file(file.path, file.content);
+          if (isDataUrl(file.content)) {
+            const base64Data = file.content.split(",")[1] || "";
+            zip.file(file.path, base64Data, { base64: true });
+          } else {
+            zip.file(file.path, file.content);
+          }
         }
       });
 
@@ -635,7 +696,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
         path: shouldStripSingleRootFolder
           ? f.path.replace(new RegExp(`^${topLevelRoots[0]}/`), "")
           : f.path,
-        content: toBase64(f.content) // Unicode-safe base64
+        content: toDeployBase64Content(f.content)
       }));
 
 
@@ -871,7 +932,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
   }
 
   return (
-      <div className="mx-auto w-full max-w-[1600px] flex h-[calc(100dvh-112px)] md:h-[100dvh] bg-black overflow-hidden relative pb-16 md:pb-0">
+      <div className="mx-auto w-full max-w-[1600px] flex h-[calc(100dvh-112px)] md:h-[100dvh] bg-black overflow-hidden relative">
 
       {/* Deployment Config Modal */}
       {showDeployConfig && (
@@ -909,7 +970,7 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                 <input
                   type="text"
                   value={rawDomainInput}
-                  onChange={(e) => setRawDomainInput(e.target.value.replace(/[^a-zA-Z0-9-\s]/g, ""))}
+                  onChange={(e) => setRawDomainInput(e.target.value.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, ""))}
                   placeholder="nama-domain-vercel"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 outline-none transition-all"
                 />
@@ -954,7 +1015,10 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       )}
 
       {/* File Explorer Sidebar */}
-      <div className="w-48 md:w-72 border-r border-white/10 flex flex-col bg-[#0a0a0a] backdrop-blur-xl shrink-0">
+      <div className={cn(
+        "border-r border-white/10 bg-[#0a0a0a] backdrop-blur-xl shrink-0",
+        "hidden md:flex md:w-72 md:flex-col"
+      )}>
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Folder className="w-4 h-4 text-blue-400" />
@@ -1019,6 +1083,12 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
       <div className="flex-1 flex flex-col min-w-0">
         <div className="h-14 border-b border-white/10 bg-[#0a0a0a] flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-4 truncate">
+            <button
+              onClick={() => setShowMobileExplorer(true)}
+              className="md:hidden p-2 rounded-lg border border-white/10 bg-white/5 text-white/70"
+            >
+              <Folder className="w-4 h-4" />
+            </button>
             <div className="hidden md:flex items-center gap-1 max-w-[340px] overflow-x-auto custom-scrollbar">
               {projectTabs.map(tab => (
                 <div key={tab} className={cn("flex items-center gap-2 px-2 py-1 rounded-lg border text-xs", tab === projectName ? "bg-white/10 border-white/20 text-white" : "bg-white/5 border-white/10 text-white/60")}>
@@ -1118,20 +1188,34 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
                   </div>
                 </div>
                 <div className="flex-1 overflow-hidden editor-container min-h-0">
-                  <CodeMirror
-                    value={code}
-                    height="100%"
-                    theme="dark"
-                    extensions={[
-                      ...getLanguage(activeFile.path),
-                      EditorView.lineWrapping,
-                      EditorView.editable.of(!isDemo)
-                    ]}
-                    onChange={(value) => {
-                      if (!isDemo) setCode(value);
-                    }}
-                    className="text-sm h-full min-h-0"
-                  />
+                  {isImageFile(activeFile.path) || isImageDataUrl(activeFile.content) ? (
+                    <div className="h-full w-full overflow-auto p-4 flex items-start justify-center bg-[#0a0a0a]">
+                      <img
+                        src={activeFile.content}
+                        alt={activeFile.path}
+                        className="max-w-full h-auto rounded-xl border border-white/10"
+                      />
+                    </div>
+                  ) : isDataUrl(activeFile.content) ? (
+                    <div className="h-full w-full flex items-center justify-center p-6 text-center text-white/50">
+                      File biner terdeteksi. Pratinjau teks dinonaktifkan untuk tipe ini.
+                    </div>
+                  ) : (
+                    <CodeMirror
+                      value={code}
+                      height="100%"
+                      theme="dark"
+                      extensions={[
+                        ...getLanguage(activeFile.path),
+                        EditorView.lineWrapping,
+                        EditorView.editable.of(!isDemo)
+                      ]}
+                      onChange={(value) => {
+                        if (!isDemo) setCode(value);
+                      }}
+                      className="text-sm h-full min-h-0"
+                    />
+                  )}
                 </div>
               </>
             ) : (
@@ -1191,6 +1275,28 @@ export function EditorModule({ setHasUnsavedChanges, appMode }: EditorModuleProp
           )}
         </div>
       </div>
+
+      {showMobileExplorer && (
+        <div className="md:hidden fixed inset-0 z-[130] bg-black/80 backdrop-blur-sm p-4">
+          <div className="h-full w-full rounded-2xl border border-white/10 bg-[#0a0a0a] flex flex-col">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Folder className="w-4 h-4 text-blue-400" />
+                <span className="text-xs font-bold text-white">Explorer</span>
+              </div>
+              <button
+                onClick={() => setShowMobileExplorer(false)}
+                className="p-2 rounded-lg text-white/60 hover:bg-white/10"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
+              {renderTree(buildFileTree(files))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="md:hidden fixed bottom-14 left-0 right-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
         <div className="grid grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-black/85 backdrop-blur-xl p-2">

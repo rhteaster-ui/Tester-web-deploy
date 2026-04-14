@@ -30,8 +30,7 @@ export function VercelLogs() {
       return;
     }
     if (project?.deploymentUrl) {
-      const normalized = String(project.deploymentUrl).replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-      setDeploymentId(normalized.replace(".vercel.app", ""));
+      setDeploymentId("");
     }
   }, [selectedProject, projects]);
 
@@ -42,19 +41,28 @@ export function VercelLogs() {
 
   const fetchVercelLogs = async () => {
     const token = localStorage.getItem("vercel_token");
-    if (!token || !deploymentId) {
+    const normalizedId = deploymentId.trim();
+    if (!token || !normalizedId) {
       toast.error("Token Vercel dan ID Deployment diperlukan");
+      return;
+    }
+    if (!/^dpl_/i.test(normalizedId)) {
+      toast.error("ID deployment harus diawali dpl_ (bukan subdomain URL).");
       return;
     }
 
     setIsPolling(true);
     try {
-      const response = await fetch(`https://api.vercel.com/v2/deployments/${deploymentId}/events`, {
+      const response = await fetch(`https://api.vercel.com/v2/deployments/${normalizedId}/events`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
       if (response.ok) {
-        setEvents(data);
+        const nextEvents = Array.isArray(data) ? data : (Array.isArray(data?.events) ? data.events : []);
+        setEvents(nextEvents);
+        if (nextEvents.length === 0) {
+          toast.info("Belum ada event build untuk deployment ini.");
+        }
       } else {
         const errorMsg = typeof data.error === "string" 
           ? data.error 
