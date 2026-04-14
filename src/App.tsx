@@ -56,8 +56,26 @@ const TokenManager = ({ onSelect }: { onSelect: (token: VercelToken) => void }) 
   };
 
   const handleDelete = async (id: number) => {
+    const removed = tokens.find((token) => token.id === id);
     await db.tokens.delete(id);
-    loadTokens();
+    const nextActive = await db.tokens.where("isActive").equals(true).first();
+    if (!nextActive) {
+      const fallback = await db.tokens.toCollection().first();
+      if (fallback?.id) {
+        await db.tokens.update(fallback.id, { isActive: true });
+        localStorage.setItem("vercel_token", fallback.value);
+        localStorage.setItem("app_mode", fallback.isTrial ? "demo" : "token");
+        onSelect(fallback);
+      } else {
+        localStorage.removeItem("vercel_token");
+        localStorage.removeItem("app_mode");
+      }
+    } else if (removed?.isActive) {
+      localStorage.setItem("vercel_token", nextActive.value);
+      localStorage.setItem("app_mode", nextActive.isTrial ? "demo" : "token");
+      onSelect(nextActive);
+    }
+    await loadTokens();
   };
 
   const handleSelect = async (token: VercelToken) => {
@@ -478,7 +496,13 @@ export default function App() {
       if (active) {
         setActiveTokenName(active.name);
         setAppMode(active.isTrial ? "demo" : "token");
+        localStorage.setItem("vercel_token", active.value);
+        localStorage.setItem("app_mode", active.isTrial ? "demo" : "token");
+        return;
       }
+      localStorage.removeItem("vercel_token");
+      localStorage.removeItem("app_mode");
+      setAppMode(null);
     };
     checkActiveToken();
   }, []);

@@ -72,14 +72,14 @@ export function AdminLogs() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-5xl mx-auto pb-24 md:pb-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-5xl mx-auto pb-24 md:pb-8 overflow-x-hidden">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-bold text-white">Log Sistem</h1>
           <p className="text-xs md:text-sm text-white/50">Aktivitas real-time dan metrik kesehatan sistem.</p>
         </div>
         
-        <div className="flex items-center gap-1 p-1 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl">
+        <div className="flex items-center gap-1 p-1 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl max-w-full overflow-x-auto">
           <button 
             onClick={() => setSubTab("system")}
             className={cn(
@@ -198,10 +198,10 @@ export function AdminLogs() {
           {projects
             .filter((p) => (subTab === "deployed" ? p.isDeployed : !p.isDeployed))
             .map((p) => (
-              <div key={p.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+              <div key={p.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 min-w-0">
                 <p className="font-bold text-white">{p.name}</p>
                 <p className="text-xs text-white/40">{p.isDeployed ? "Sudah deploy" : "Tersimpan di repository"}</p>
-                {p.deploymentUrl && <p className="text-xs text-green-400">{p.deploymentUrl}</p>}
+                {p.deploymentUrl && <p className="text-xs text-green-400 break-all">{p.deploymentUrl}</p>}
                 {p.deploymentUrl && (
                   <div className="flex items-center gap-2">
                     <button
