@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/src/lib/utils";
 import JSZip from "jszip";
 import { db } from "@/src/lib/db";
+import { VercelToken } from "@/src/types";
 
 interface DeploymentPanelProps {
   setActiveTab: (tab: string) => void;
@@ -16,9 +17,34 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
   const [deploymentResult, setDeploymentResult] = useState<any>(null);
   const isUsingDemoMode = !token || token === "TRIAL_MODE_ACTIVE";
 
-  const handleSaveToken = () => {
-    localStorage.setItem("vercel_token", token);
-    toast.success("Token berhasil disimpan secara lokal");
+  const handleSaveToken = async () => {
+    const cleanedToken = token.trim();
+    if (!cleanedToken) {
+      toast.error("Token tidak boleh kosong");
+      return;
+    }
+
+    const isDemo = cleanedToken === "TRIAL_MODE_ACTIVE";
+    const activeToken = await db.tokens.where("isActive").equals(true).first();
+
+    if (activeToken?.id) {
+      await db.tokens.update(activeToken.id, {
+        value: cleanedToken,
+        isTrial: isDemo
+      } as Partial<VercelToken>);
+    } else {
+      await db.tokens.toCollection().modify({ isActive: false });
+      await db.tokens.add({
+        name: isDemo ? "Demo Mode" : "Akun Manual",
+        value: cleanedToken,
+        isTrial: isDemo,
+        isActive: true
+      });
+    }
+
+    localStorage.setItem("vercel_token", cleanedToken);
+    localStorage.setItem("app_mode", isDemo ? "demo" : "token");
+    toast.success(isDemo ? "Mode demo aktif" : "Akun token tersimpan dan aktif");
   };
 
   const detectFramework = (files: any[]) => {
@@ -179,15 +205,18 @@ export function DeploymentPanel({ setActiveTab }: DeploymentPanelProps) {
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button 
-                  onClick={handleSaveToken}
+                  onClick={() => void handleSaveToken()}
                   className="flex-1 py-4 bg-white text-black font-black rounded-2xl hover:scale-105 active:scale-95 transition-all duration-300 shadow-xl shadow-white/5 min-h-[56px]"
                 >
                   Simpan Token
                 </button>
                 <button 
                   onClick={() => {
+                    const shouldEnableDemo = window.confirm("Mode demo akan menjalankan website deploy dengan waktu terbatas. Lanjutkan?");
+                    if (!shouldEnableDemo) return;
                     setToken("TRIAL_MODE_ACTIVE");
                     localStorage.setItem("vercel_token", "TRIAL_MODE_ACTIVE");
+                    localStorage.setItem("app_mode", "demo");
                     toast.info("Mode Demo diaktifkan");
                   }}
                   className="px-8 py-4 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-black rounded-2xl transition-all border border-blue-500/20 min-h-[56px]"

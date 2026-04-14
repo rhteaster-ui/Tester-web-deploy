@@ -77,7 +77,7 @@ export function VercelLogs() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-5xl mx-auto pb-24 md:pb-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8 max-w-5xl mx-auto pb-24 md:pb-8 overflow-x-hidden">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4">
           <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
@@ -91,7 +91,7 @@ export function VercelLogs() {
           </div>
         </div>
         
-        <div className="md:col-span-2 flex gap-2">
+        <div className="md:col-span-2 flex gap-2 min-w-0">
           <button 
             onClick={() => copyToClipboard(`https://${deploymentId}.vercel.app`)}
             disabled={!deploymentId}
@@ -165,7 +165,7 @@ export function VercelLogs() {
             <div key={i} className="flex gap-3 md:gap-4 group min-w-0">
               <span className="text-white/20 shrink-0">[{new Date(event.created).toLocaleTimeString()}]</span>
               <span className={cn(
-                "flex-1 break-words min-w-0",
+                "flex-1 break-all min-w-0",
                 event.type === "error" ? "text-red-400" : "text-white/70"
               )}>
                 {event.text}
